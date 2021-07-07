@@ -4,7 +4,9 @@ import hashlib
 import io
 import json
 import os
+import sys
 import zipfile
+import subprocess
 from functools import lru_cache
 from pathlib import Path
 from typing import Tuple, Optional, Dict
@@ -246,3 +248,25 @@ def upload_file(
     response = getattr(requests, method)(url, data=data, headers=headers, stream=stream)
 
     return response
+
+
+def install_requirements(requirements_file: 'Path'):
+    """Install modules included in requirments file
+
+    :param requirements_file: the requirements.txt file
+    """
+    subprocess.check_call(
+        [sys.executable, '-m', 'pip', 'install', '-r', f'{requirements_file}']
+    )
+
+
+def freeze_requirements(freeze_file: 'Path'):
+    """Output installed packages in requirements format.
+
+    :param freeze_file: the freezed requirments file
+    """
+    reqs = subprocess.check_output(
+        [sys.executable, '-m', 'pip', 'freeze', '--exclude-editable']
+    )
+    with freeze_file.open('wb') as f:
+        f.write(reqs)

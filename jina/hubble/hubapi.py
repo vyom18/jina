@@ -2,12 +2,10 @@
 
 import os
 import shutil
-import subprocess
-import sys
 from pathlib import Path
 from typing import Tuple, Optional
 
-from .helper import unpack_package
+from .helper import unpack_package, install_requirements
 
 _hub_root = Path(
     os.environ.get('JINA_HUB_ROOT', Path.home().joinpath('.jina', 'hub-packages'))
@@ -24,16 +22,6 @@ def get_dist_path(uuid: str, tag: str) -> Tuple['Path', 'Path']:
     pkg_path = _hub_root / uuid
     pkg_dist_path = _hub_root / f'{uuid}-{tag}.dist-info'
     return pkg_path, pkg_dist_path
-
-
-def _install_requirements(requirements_file: 'Path'):
-    """Install modules included in requirments file
-
-    :param requirements_file: the requirements.txt file
-    """
-    subprocess.check_call(
-        [sys.executable, '-m', 'pip', 'install', '-r', f'{requirements_file}']
-    )
 
 
 def install_local(
@@ -74,7 +62,7 @@ def install_local(
         if install_deps:
             requirements_file = pkg_path / 'requirements.txt'
             if requirements_file.exists():
-                _install_requirements(requirements_file)
+                install_requirements(requirements_file)
                 shutil.copyfile(requirements_file, pkg_dist_path / 'requirements.txt')
 
         manifest_path = pkg_path / 'manifest.yml'

@@ -12,6 +12,7 @@ from urllib.parse import urlencode
 from .helper import (
     archive_package,
     download_with_resume,
+    freeze_requirements,
     parse_hub_uri,
     get_hubble_url,
     upload_file,
@@ -90,11 +91,20 @@ class HubIO:
             req_header = self._get_request_header()
             try:
                 st.update(f'Packaging {self.args.path}...')
+
+                # check all installed Python packages with pip freeze
+                freeze_file = Path(self.args.path) / 'requirements.lock'
+                freeze_requirements(freeze_file)
+
+                # archive the package folder
                 md5_hash = hashlib.md5()
                 bytesio = archive_package(Path(self.args.path))
                 content = bytesio.getvalue()
                 md5_hash.update(content)
                 md5_digest = md5_hash.hexdigest()
+
+                # clean the generated freezed requirement file
+                freeze_file.unlink()
 
                 # upload the archived package
                 form_data = {
