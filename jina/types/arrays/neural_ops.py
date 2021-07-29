@@ -4,6 +4,7 @@ from typing import Optional, Union, Callable, Tuple
 import numpy as np
 
 from jina import Document
+from ...logging.profile import TimeContext
 from ...math.helper import top_k, minmax_normalize
 
 if False:
@@ -52,33 +53,36 @@ class DocumentArrayNeuralOpsMixin:
         :param use_scipy: use Scipy as the computation backend
         :param metric_name: if provided, then match result will be marked with this string.
         """
-
-        X = np.stack(self.get_attributes('embedding'))
-        Y = np.stack(darray.get_attributes('embedding'))
+        with TimeContext('getter X'):
+            X = np.stack(self.get_attributes('embedding'))
+        with TimeContext('getter Y'):
+            Y = np.stack(darray.get_attributes('embedding'))
         limit = min(limit, len(darray))
 
-        if isinstance(metric, str):
-            if use_scipy:
-                from scipy.spatial.distance import cdist
+        with TimeContext('computing'):
+            if isinstance(metric, str):
+                if use_scipy:
+                    from scipy.spatial.distance import cdist
+                else:
+                    from ...math.distance import cdist
+                dists = cdist(X, Y, metric)
+            elif callable(metric):
+                dists = metric(X, Y)
             else:
-                from ...math.distance import cdist
-            dists = cdist(X, Y, metric)
-        elif callable(metric):
-            dists = metric(X, Y)
-        else:
-            raise TypeError(
-                f'metric must be either string or a 2-arity function, received: {metric!r}'
-            )
+                raise TypeError(
+                    f'metric must be either string or a 2-arity function, received: {metric!r}'
+                )
 
-        dist, idx = top_k(dists, limit, descending=False)
-        if normalization is not None:
-            if isinstance(normalization, (tuple, list)):
-                dist = minmax_normalize(dist, normalization)
+            dist, idx = top_k(dists, limit, descending=False)
+            if normalization is not None:
+                if isinstance(normalization, (tuple, list)):
+                    dist = minmax_normalize(dist, normalization)
 
-        m_name = metric_name or (metric.__name__ if callable(metric) else metric)
-        for _q, _ids, _dists in zip(self, idx, dist):
-            _q.matches.clear()
-            for _id, _dist in zip(_ids, _dists):
-                d = Document(darray[int(_id)], copy=True)
-                d.scores[m_name] = _dist
-                _q.matches.append(d)
+        with TimeContext('constructing matches'):
+            m_name = metric_name or (metric.__name__ if callable(metric) else metric)
+            for _q, _ids, _dists in zip(self, idx, dist):
+                _q.matches.clear()
+                for _id, _dist in zip(_ids, _dists):
+                    d = Document(darray[int(_id)], copy=True)
+                    d.scores[m_name] = _dist
+                    _q.matches.append(d)
