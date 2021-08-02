@@ -5,6 +5,7 @@ import numpy as np
 
 from ... import Document
 from ...importer import ImportExtensions
+from ...logging.profile import TimeContext
 from ...math.helper import top_k, minmax_normalize
 
 if False:
@@ -54,39 +55,42 @@ class DocumentArrayNeuralOpsMixin:
         :param metric_name: if provided, then match result will be marked with this string.
         """
 
-        X = np.stack(self.get_attributes('embedding'))
-        Y = np.stack(darray.get_attributes('embedding'))
+        with TimeContext('getter'):
+            X = np.stack(self.get_attributes('embedding'))
+            Y = np.stack(darray.get_attributes('embedding'))
 
-        if isinstance(metric, str):
-            if use_scipy:
-                from scipy.spatial.distance import cdist
+        with TimeContext('computing'):
+            if isinstance(metric, str):
+                if use_scipy:
+                    from scipy.spatial.distance import cdist
+                else:
+                    from ...math.distance import cdist
+                dists = cdist(X, Y, metric)
+            elif callable(metric):
+                dists = metric(X, Y)
             else:
-                from ...math.distance import cdist
-            dists = cdist(X, Y, metric)
-        elif callable(metric):
-            dists = metric(X, Y)
-        else:
-            raise TypeError(
-                f'metric must be either string or a 2-arity function, received: {metric!r}'
-            )
+                raise TypeError(
+                    f'metric must be either string or a 2-arity function, received: {metric!r}'
+                )
 
-        dist, idx = top_k(dists, min(limit, len(darray)), descending=False)
-        if normalization is not None:
-            if isinstance(normalization, (tuple, list)):
-                dist = minmax_normalize(dist, normalization)
+            dist, idx = top_k(dists, min(limit, len(darray)), descending=False)
+            if normalization is not None:
+                if isinstance(normalization, (tuple, list)):
+                    dist = minmax_normalize(dist, normalization)
 
-        m_name = metric_name or (metric.__name__ if callable(metric) else metric)
-        for _q, _ids, _dists in zip(self, idx, dist):
-            _q.matches.clear()
-            for _id, _dist in zip(_ids, _dists):
-                # Note, when match self with other, or both of them share the same Document
-                # we might have recursive matches .
-                # checkout https://github.com/jina-ai/jina/issues/3034
-                d = darray[int(_id)]
-                if d.id in self:
-                    d = Document(d, copy=True)
-                    d.pop('matches')
-                _q.matches.append(d, scores={m_name: _dist}, copy=False)
+        with TimeContext('add matches'):
+            m_name = metric_name or (metric.__name__ if callable(metric) else metric)
+            for _q, _ids, _dists in zip(self, idx, dist):
+                _q.matches.clear()
+                for _id, _dist in zip(_ids, _dists):
+                    # Note, when match self with other, or both of them share the same Document
+                    # we might have recursive matches .
+                    # checkout https://github.com/jina-ai/jina/issues/3034
+                    d = darray[int(_id)]
+                    if d.id in self:
+                        d = Document(d, copy=True)
+                        d.pop('matches')
+                    _q.matches.append(d, scores={m_name: _dist}, copy=False)
 
     def visualize(
         self,
