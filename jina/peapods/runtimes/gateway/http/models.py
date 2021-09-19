@@ -260,22 +260,6 @@ class JinaStatusModel(BaseModel):
         allow_population_by_field_name = True
 
 
-def _get_example_data():
-    _example = jina_pb2.DocumentArrayProto()
-    d0 = Document(id='🐲', tags={'guardian': 'Azure Dragon', 'position': 'East'})
-    d1 = Document(id='🐦', tags={'guardian': 'Vermilion Bird', 'position': 'South'})
-    d2 = Document(id='🐢', tags={'guardian': 'Black Tortoise', 'position': 'North'})
-    d3 = Document(id='🐯', tags={'guardian': 'White Tiger', 'position': 'West'})
-    d0.chunks.append(d1)
-    d0.chunks[0].chunks.append(d2)
-    d0.matches.append(d3)
-    _example.docs.extend([d0.proto, d1.proto, d2.proto, d3.proto])
-    return MessageToDict(
-        _example,
-        including_default_value_fields=True,
-    )['docs']
-
-
 class JinaRequestModel(BaseModel):
     """
     Jina HTTP request model.
@@ -290,17 +274,14 @@ class JinaRequestModel(BaseModel):
         ]
     ] = Field(
         None,
-        example=_get_example_data(),
         description='Data to send, a list of dict/string/bytes that can be converted into a list of `Document` objects',
     )
     target_peapod: Optional[str] = Field(
         None,
-        example='pod0/*',
         description='A regex string represent the certain peas/pods request targeted.',
     )
     parameters: Optional[Dict] = Field(
         None,
-        example={'top_k': 3, 'model': 'bert'},
         description='A dictionary of parameters to be sent to the executor.',
     )
 
