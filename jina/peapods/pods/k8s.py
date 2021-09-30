@@ -35,23 +35,23 @@ class K8sPod(BasePod):
             'tail_deployment': None,
             'deployments': [],
         }
-        parallel = getattr(args, 'parallel', 1)
+        shards = getattr(args, 'shards', 1)
         replicas = getattr(args, 'replicas', 1)
         uses_before = getattr(args, 'uses_before', None)
-        if parallel > 1 or (len(self.needs) > 1 and replicas > 1) or uses_before:
+        if shards > 1 or (len(self.needs) > 1 and replicas > 1) or uses_before:
             # reasons to separate head and tail from peas is that they
             # can be deducted based on the previous and next pods
             parsed_args['head_deployment'] = copy.copy(args)
             parsed_args['head_deployment'].uses = (
                 args.uses_before or __default_executor__
             )
-        if parallel > 1 or getattr(args, 'uses_after', None):
+        if shards > 1 or getattr(args, 'uses_after', None):
             parsed_args['tail_deployment'] = copy.copy(args)
             parsed_args['tail_deployment'].uses = (
                 args.uses_after or __default_executor__
             )
 
-        parsed_args['deployments'] = [args] * parallel
+        parsed_args['deployments'] = [args] * shards
         return parsed_args
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -87,7 +87,7 @@ class K8sPod(BasePod):
         image_name = kubernetes_deployment.get_image_name(deployment_args.uses)
         name_suffix = self.name + (
             ''
-            if self.args.parallel == 1 and type(deployment_id) == int
+            if self.args.shards == 1 and type(deployment_id) == int
             else ('-' + str(deployment_id))
         )
         dns_name = kubernetes_deployment.to_dns_name(name_suffix)
@@ -158,7 +158,7 @@ class K8sPod(BasePod):
             if self.deployment_args['head_deployment'] is not None:
                 self._deploy_runtime(self.deployment_args['head_deployment'], 1, 'head')
 
-            for i in range(self.args.parallel):
+            for i in range(self.args.shards):
                 deployment_args = self.deployment_args['deployments'][i]
                 self._deploy_runtime(deployment_args, self.args.replicas, i)
 
